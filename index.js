@@ -14,17 +14,16 @@ const express = require('express')
 // Globals
 //
 
-// Path on remote LizardFS filesystem that will be used for volume storage
-const remote_path = process.env['REMOTE_PATH']
 // Used when not running as a Docker plugin to set the driver alias
 var plugin_alias = process.env['ALIAS']
 if (plugin_alias == undefined || plugin_alias == '') {
-  plugin_alias = 'lizardfs'
+  plugin_alias = 'local-bind'
 }
 // The name of the "root" volume ( if specified )
 const root_volume_name = process.env['ROOT_VOLUME_NAME']
-// Mountpoint for remote LizardFS filesystem
-const volume_root = '/mnt/lizardfs'
+// Source dir for data storage. You must mount your storage dir from the host
+// to this directory in the container.
+const volume_root = '/mnt/source-data'
 // Directory to mount volumes to inside the container
 const container_volume_path = '/mnt/docker-volumes'
 // Address that the webserver will listen on
@@ -40,7 +39,7 @@ if (host_volume_path == undefined || host_volume_path == '') {
   host_volume_path = container_volume_path
 }
 
-// Options to the `mfsmount` command
+// Options to the `mount -b` command
 var mount_options = []
 if (process.env['MOUNT_OPTIONS'].length != 0) {
   mount_options = process.env['MOUNT_OPTIONS'].split(' ')
@@ -57,7 +56,7 @@ if (process.env['MOUNT_OPTIONS'].length != 0) {
 */
 var mounted_volumes = {}
 
-// Records whether or not we have mounted the LizardFS volume root
+// Records whether or not we have mounted the volume root
 var has_mounted_volume_root = false
 
 //
@@ -71,7 +70,7 @@ const log = require('loglevel-message-prefix')(require('loglevel'), {
 // Log level set by plugin config
 log.setLevel(process.env['LOG_LEVEL'])
 
-log.info('Starting up LizardFS volume plugin')
+log.info('Starting up local-bind volume plugin')
 
 //
 // Express webserver and middleware
@@ -83,8 +82,6 @@ app.use(express.json({type: () => true}))
 
 // Plugin activation
 app.use(function (req, res, next) {
-  log.debug(container_volume_path)
-  log.debug(host_volume_path)
   // If this is an activation request
   if (req.method == 'POST' && req.path == '/Plugin.Activate') {
     log.debug('/Plugin.Activate')
@@ -93,55 +90,6 @@ app.use(function (req, res, next) {
     })
     return
   } else {
-    next()
-  }
-})
-
-/*
- * Custom middleware that makes sure the LizardFS remote filesystem is mounted
- * before any other plugin functions are executed.
- */
-app.use(function (req, res, next) {
-  // If we haven't mounted the LizardFS remote
-  if (has_mounted_volume_root == false) {
-    log.info('Mounting LizardFS remote path')
-
-    try {
-      // Mount LizardFS remote path
-      execFileSync(
-        'mfsmount',
-        [
-          volume_root,
-          '-H', process.env['HOST'],
-          '-P', process.env['PORT'],
-          '-S', remote_path,
-          ...mount_options
-        ],
-        {
-          // We only wait 3 seconds for the master to connect.
-          // This prevents the plugin from stalling Docker operations if the
-          // LizardFS master is unresponsive.
-          timeout: parseInt(process.env['CONNECT_TIMEOUT'])
-        }
-      )
-
-      // Success
-      has_mounted_volume_root = true
-
-      // Pass traffic on to the next handler
-      next()
-
-    } catch (err) {
-      // Failure
-      res.json({
-        Err: err.toString()
-      })
-      return
-    }
-
-  // If we have already mounted LizardFS remote
-  } else {
-    // Nothing to do, pass traffic to the next handler
     next()
   }
 })
@@ -169,7 +117,6 @@ function volume_is_mounted(volume_name) {
 
 app.post('/VolumeDriver.Create', function (req, res) {
   var volume_name = req.body.Name
-  var replication_goal = req.body.Opts.ReplicationGoal
   var volume_path = path.join(volume_root, volume_name)
 
   log.info(`/VolumeDriver.Create: ${volume_name}`)
@@ -184,20 +131,8 @@ app.post('/VolumeDriver.Create', function (req, res) {
   }
 
   try {
-    // Create volume on LizardFS filesystem
+    // Create volume on filesystem
     fs.ensureDirSync(volume_path)
-
-    // If the user specified a replication goal for the volume
-    if (replication_goal != undefined) {
-      // Set the replication goal
-      execFileSync(
-        'lizardfs',
-        ['setgoal', '-r', replication_goal, volume_path],
-        {
-          timeout: parseInt(process.env['CONNECT_TIMEOUT'])
-        }
-      )
-    }
 
     // Success
     res.json({})
@@ -222,7 +157,7 @@ app.post('/VolumeDriver.Remove', function (req, res) {
     // You cannot delete the root volume.
     // Return an error.
     res.json({
-      Err: 'You cannot delete the LizardFS root volume.'
+      Err: 'You cannot delete the root volume.'
     })
     return
   }
@@ -249,7 +184,14 @@ app.post('/VolumeDriver.Mount', function (req, res) {
   var volume_name = req.body.Name
   var mount_id = req.body.ID
   var container_mountpoint = path.join(container_volume_path, volume_name)
-  var host_mountpoint = path.join(host_volume_path, volume_name)
+  var host_mountpoint = "";
+
+  if (volume_name == root_volume_name) {
+    // Mount *all* of the volumes
+    host_mountpoint = host_volume_path
+  } else {
+    host_mountpoint = path.join(host_volume_path, volume_name)
+  }
 
   log.debug(`/VolumeDriver.Mount: ${volume_name}`)
   log.debug(`           Mount ID: ${mount_id}`)
@@ -269,35 +211,42 @@ app.post('/VolumeDriver.Mount', function (req, res) {
   } else {
     try {
       // Create volume mountpoint
+      log.debug(`Creating mountpoint: ${container_mountpoint}`)
       fs.ensureDirSync(container_mountpoint)
 
-      var mount_remote_path = ""
+      var mount_source_path = ""
       // If we are mounting the root volume
       if (volume_name == root_volume_name) {
         // We mount the directory containing *all* of the volumes
-        mount_remote_path = remote_path
+        mount_source_path = volume_root
       } else {
         // We mount the specified volume
-        mount_remote_path = path.join(remote_path, volume_name)
+        mount_source_path = path.join(volume_root, volume_name)
       }
 
+      log.debug(`mount_source_path: ${mount_source_path}`)
+
+      // Unmount the volume if it was already mounted
+      // try {
+      //   execFileSync('umount', [container_mountpoint]);
+      // } catch (err) {} // We don't care if it isn't mounted
+
       // Mount volume
-      execFileSync(
-        'mfsmount',
-        [
-          container_mountpoint,
-          '-H', process.env['HOST'],
-          '-P', process.env['PORT'],
-          '-S', mount_remote_path,
-          ...mount_options
-        ],
-        {
-          // We only wait 3 seconds for the master to connect.
-          // This prevents the plugin from stalling Docker operations if the
-          // LizardFS master is unresponsive.
-          timeout: parseInt(process.env['CONNECT_TIMEOUT'])
-        }
-      )
+      // execFileSync(
+      //   'mount',
+      //   [
+      //     '-o', 'bind',
+      //     ...mount_options,
+      //     mount_source_path,
+      //     container_mountpoint
+      //   ],
+      //   {
+      //     // We only wait 3 seconds for the master to connect.
+      //     // This prevents the plugin from stalling Docker operations if the
+      //     // LizardFS master is unresponsive.
+      //     timeout: parseInt(process.env['CONNECT_TIMEOUT'])
+      //   }
+      // )
 
       // Start a list of containers that have mounted this volume
       mounted_volumes[volume_name] = [mount_id]

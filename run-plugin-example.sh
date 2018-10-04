@@ -1,0 +1,1 @@
+docker-run -it --rm --name local-bind-plugin -v /var/lib/docker/plugins/local-bind/data:/mnt/source-data:rshared -v /run/docker/plugins/local-bind:/run/docker/plugins --cap-add SYS_ADMIN -e ROOT_VOLUME_NAME=docker-volumes -e LOCAL_PATH=/var/lib/docker/plugins/local-bind/data -e LOG_LEVEL=debug kadimasolutions/local-bind

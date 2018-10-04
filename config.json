@@ -58,7 +58,7 @@
     }
   ],
   "interface": {
-    "socket": "lizardfs.sock",
+    "socket": "local-bind.sock",
     "types": [
       "docker.volumedriver/2.0"
     ]
@@ -66,11 +66,6 @@
   "linux": {
     "capabilities": [
       "CAP_SYS_ADMIN"
-    ],
-    "devices": [
-      {
-        "path": "/dev/fuse"
-      }
     ]
   },
   "network": {

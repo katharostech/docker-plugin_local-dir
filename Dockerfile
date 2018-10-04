@@ -5,6 +5,7 @@ FROM node:8-slim
 ####
 
 # Create directories for mounts
+RUN mkdir -p /mnt/source-data
 RUN mkdir -p /mnt/docker-volumes
 
 # Copy in package.json
@@ -17,12 +18,9 @@ WORKDIR /project
 RUN npm install
 
 # Set Configuration Defaults
-ENV HOST=mfsmaster \
-    PORT=9421 \
-    ALIAS=lizardfs \
+ENV ALIAS=local-bind \
     ROOT_VOLUME_NAME="" \
     MOUNT_OPTIONS="" \
-    REMOTE_PATH=/docker/volumes \
     LOCAL_PATH="" \
     CONNECT_TIMEOUT=10000 \
     LOG_LEVEL=info
