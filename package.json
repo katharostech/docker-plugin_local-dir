@@ -1,0 +1,27 @@
+{
+  "name": "docker-plugin_local-bind",
+  "version": "1.0.0",
+  "description": "Alternative to the docker local volume driver",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://phab.kadima.solutions/diffusion/DPLFS/docker-plugin_lizardfs.git"
+  },
+  "keywords": [
+    "Docker"
+  ],
+  "author": "Zicklag <zicklag@katharostech.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@godaddy/terminus": "^2.2.0",
+    "express": "^4.16.3",
+    "fs-extra": "^6.0.0",
+    "loglevel": "^1.6.1",
+    "loglevel-message-prefix": "^3.0.0",
+    "ls": "^0.2.1"
+  }
+}
