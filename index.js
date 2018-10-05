@@ -17,7 +17,7 @@ const express = require('express')
 // Used when not running as a Docker plugin to set the driver alias
 var plugin_alias = process.env['ALIAS']
 if (plugin_alias == undefined || plugin_alias == '') {
-  plugin_alias = 'local-bind'
+  plugin_alias = 'local-dir'
 }
 // The name of the "root" volume ( if specified )
 const root_volume_name = process.env['ROOT_VOLUME_NAME']
@@ -70,7 +70,7 @@ const log = require('loglevel-message-prefix')(require('loglevel'), {
 // Log level set by plugin config
 log.setLevel(process.env['LOG_LEVEL'])
 
-log.info('Starting up local-bind volume plugin')
+log.info('Starting up local-dir volume plugin')
 
 //
 // Express webserver and middleware

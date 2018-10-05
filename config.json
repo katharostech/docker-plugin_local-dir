@@ -58,7 +58,7 @@
     }
   ],
   "interface": {
-    "socket": "local-bind.sock",
+    "socket": "local-dir.sock",
     "types": [
       "docker.volumedriver/2.0"
     ]

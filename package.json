@@ -1,5 +1,5 @@
 {
-  "name": "docker-plugin_local-bind",
+  "name": "docker-plugin_local-dir",
   "version": "1.0.0",
   "description": "Alternative to the docker local volume driver",
   "main": "index.js",

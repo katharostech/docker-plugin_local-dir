@@ -18,7 +18,7 @@ WORKDIR /project
 RUN npm install
 
 # Set Configuration Defaults
-ENV ALIAS=local-bind \
+ENV ALIAS=local-dir \
     ROOT_VOLUME_NAME="" \
     MOUNT_OPTIONS="" \
     LOCAL_PATH="" \
