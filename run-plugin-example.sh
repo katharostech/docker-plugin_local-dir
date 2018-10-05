@@ -2,7 +2,7 @@
 local_data_dir=${1-"/var/lib/docker/plugins/local-dir/data"}
 driver_alias=${2-"local-dir"}
 
-docker run -d --name local-dir-plugin \
+docker run -d --name local-dir-plugin --restart=always \
 -v ${local_data_dir}:/mnt/source-data:rshared \
 -v /run/docker/plugins/local-dir:/run/docker/plugins \
 --cap-add SYS_ADMIN \
