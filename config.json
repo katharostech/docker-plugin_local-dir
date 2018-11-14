@@ -1,5 +1,5 @@
 {
-  "description": "LizardFS volume plugin for Docker",
+  "description": "Local-Dir Volume Plugin for Docker",
   "documentation": "https://docs.docker.com/engine/extend/plugins/",
   "workdir": "/project",
   "entrypoint": [
@@ -8,25 +8,15 @@
   ],
   "env": [
     {
-      "name": "HOST",
-      "settable": [
-        "value"
-      ],
-      "value": "mfsmaster"
-    },
-    {
-      "name": "PORT",
-      "settable": [
-        "value"
-      ],
-      "value": "9421"
-    },
-    {
       "name": "ROOT_VOLUME_NAME",
       "settable": [
         "value"
       ],
       "value": ""
+    },
+    {
+      "name": "LOCAL_PATH",
+      "value": "/mnt/source-data"
     },
     {
       "name": "MOUNT_OPTIONS",
@@ -36,25 +26,26 @@
       "value": ""
     },
     {
-      "name": "REMOTE_PATH",
-      "settable": [
-        "value"
-      ],
-      "value": "/docker/volumes"
-    },
-    {
-      "name": "CONNECT_TIMEOUT",
-      "settable": [
-        "value"
-      ],
-      "value": "10000"
-    },
-    {
       "name": "LOG_LEVEL",
       "settable": [
         "value"
       ],
       "value": "info"
+    }
+  ],
+  "mounts": [
+    {
+      "name": "DATA_DIR",
+      "description": "Path to directory containing volume data",
+      "type": "bind",
+      "source": "/docker/volumes",
+      "destination": "/mnt/source-data",
+      "settable": [
+        "source"
+      ],
+      "options": [
+        "rbind"
+      ]
     }
   ],
   "interface": {
@@ -67,9 +58,6 @@
     "capabilities": [
       "CAP_SYS_ADMIN"
     ]
-  },
-  "network": {
-    "type": "host"
   },
   "propagatedMount": "/mnt/docker-volumes"
 }

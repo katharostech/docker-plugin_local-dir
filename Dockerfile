@@ -20,9 +20,8 @@ RUN npm install
 # Set Configuration Defaults
 ENV ALIAS=local-dir \
     ROOT_VOLUME_NAME="" \
-    MOUNT_OPTIONS="" \
     LOCAL_PATH="" \
-    CONNECT_TIMEOUT=10000 \
+    MOUNT_OPTIONS="" \
     LOG_LEVEL=info
 
 # Copy in source code

@@ -1,4 +1,4 @@
-PLUGIN_NAME = kadimasolutions/lizardfs-volume-plugin
+PLUGIN_NAME = kadimasolutions/local-dir-volume-plugin
 PLUGIN_TAG ?= latest
 
 all: clean rootfs create
@@ -35,6 +35,6 @@ disable:
 	@echo "### disable plugin ${PLUGIN_NAME}:${PLUGIN_TAG}"
 	@docker plugin disable ${PLUGIN_NAME}:${PLUGIN_TAG}
 
-push:  clean rootfs create enable
+push:  clean rootfs create
 	@echo "### push plugin ${PLUGIN_NAME}:${PLUGIN_TAG}"
 	@docker plugin push ${PLUGIN_NAME}:${PLUGIN_TAG}
