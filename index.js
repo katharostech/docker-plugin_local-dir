@@ -29,6 +29,13 @@ const container_volume_path = '/mnt/docker-volumes'
 // Address that the webserver will listen on
 const bind_address = `/run/docker/plugins/${plugin_alias}.sock`
 
+var plugin_v2 = process.env['PLUGIN_V2']
+if (plugin_v2 == undefined || plugin_v2 == '') {
+  plugin_v2 = false
+} else {
+  plugin_v2 = true
+}
+
 // The directory that volumes are mounted to on the host system
 var host_volume_path = process.env['LOCAL_PATH']
 
@@ -98,7 +105,7 @@ app.use(function (req, res, next) {
 // Helper Functions
 //
 
-/*
+/**
  * Determine whether or not a volume is mounted by a container based on our
  * `mounted_volumes` object.
  */
@@ -108,6 +115,26 @@ function volume_is_mounted(volume_name) {
     return true
   } else {
     return false
+  }
+}
+
+/**
+ * Get the mountpoint of the given volume as Docker should see it. This will
+ * return the mountpoint adjusted so that docker will know where to find the
+ * volume.
+ * @param {*} volume_name 
+ */
+function get_volume_mountpoint(volume_name) {
+  var mountpoint = '';
+
+  if (plugin_v2) {
+    mountpoint = container_volume_path
+  } else {
+    mountpoint = host_volume_path
+  }
+
+  if (volume_name != root_volume_name) {
+    mountpoint = path.join(mountpoint, volume_name)
   }
 }
 
@@ -184,14 +211,8 @@ app.post('/VolumeDriver.Mount', function (req, res) {
   var volume_name = req.body.Name
   var mount_id = req.body.ID
   var container_mountpoint = path.join(container_volume_path, volume_name)
-  var host_mountpoint = "";
 
-  if (volume_name == root_volume_name) {
-    // Mount *all* of the volumes
-    host_mountpoint = host_volume_path
-  } else {
-    host_mountpoint = path.join(host_volume_path, volume_name)
-  }
+  var mountpoint = get_volume_mountpoint(volume_name)
 
   log.debug(`/VolumeDriver.Mount: ${volume_name}`)
   log.debug(`           Mount ID: ${mount_id}`)
@@ -203,7 +224,7 @@ app.post('/VolumeDriver.Mount', function (req, res) {
 
     // Return the mountpoint
     res.json({
-      Mountpoint: host_mountpoint
+      Mountpoint: mountpoint
     })
     return
 
@@ -227,33 +248,37 @@ app.post('/VolumeDriver.Mount', function (req, res) {
       log.debug(`mount_source_path: ${mount_source_path}`)
 
       // Unmount the volume if it was already mounted
-      // try {
-      //   execFileSync('umount', [container_mountpoint]);
-      // } catch (err) {} // We don't care if it isn't mounted
+      try {
+        execFileSync('umount', [container_mountpoint]);
+      } catch (err) {} // We don't care if it isn't mounted
 
-      // Mount volume
-      // execFileSync(
-      //   'mount',
-      //   [
-      //     '-o', 'bind',
-      //     ...mount_options,
-      //     mount_source_path,
-      //     container_mountpoint
-      //   ],
-      //   {
-      //     // We only wait 3 seconds for the master to connect.
-      //     // This prevents the plugin from stalling Docker operations if the
-      //     // LizardFS master is unresponsive.
-      //     timeout: parseInt(process.env['CONNECT_TIMEOUT'])
-      //   }
-      // )
+      if (plugin_v2) {
+        // Mount volume. Note that we don't need to mount the volume if it is running
+        // in a normal container ( plugin V1 ) because we can just return the path on
+        // the host to mount.
+        execFileSync(
+          'mount',
+          [
+            '-o', 'bind',
+            ...mount_options,
+            mount_source_path,
+            container_mountpoint
+          ],
+          {
+            // We only wait 3 seconds for the master to connect.
+            // This prevents the plugin from stalling Docker operations if the
+            // LizardFS master is unresponsive.
+            // timeout: parseInt(process.env['CONNECT_TIMEOUT'])
+          }
+        )
+      }
 
       // Start a list of containers that have mounted this volume
       mounted_volumes[volume_name] = [mount_id]
 
       // Success: Return the mountpoint
       res.json({
-        Mountpoint: host_mountpoint
+        Mountpoint: mountpoint
       })
       return
 
@@ -269,7 +294,6 @@ app.post('/VolumeDriver.Mount', function (req, res) {
 
 app.post('/VolumeDriver.Path', function (req, res) {
   var volume_name = req.body.Name
-  var host_mountpoint = path.join(host_volume_path, volume_name)
 
   log.debug(`/VolumeDriver.Path: ${volume_name}`)
 
@@ -277,7 +301,7 @@ app.post('/VolumeDriver.Path', function (req, res) {
   if (volume_is_mounted(volume_name)) {
     // Return the Mountpoint
     res.json({
-      Mountpoint: host_mountpoint
+      Mountpoint: get_volume_mountpoint(volume_name)
     })
     return
 
@@ -325,7 +349,7 @@ app.post('/VolumeDriver.Unmount', function (req, res) {
 
 app.post('/VolumeDriver.Get', function (req, res) {
   var volume_name = req.body.Name
-  var host_mountpoint = path.join(host_volume_path, volume_name)
+  var mountpoint = get_volume_mountpoint(volume_name)
 
   log.debug(`/VolumeDriver.Get: ${volume_name}`)
 
@@ -337,7 +361,7 @@ app.post('/VolumeDriver.Get', function (req, res) {
       res.json({
         Volume: {
           Name: root_volume_name,
-          Mountpoint: host_mountpoint
+          Mountpoint: mountpoint
         }
       })
       return
@@ -367,7 +391,7 @@ app.post('/VolumeDriver.Get', function (req, res) {
       res.json({
         Volume: {
           Name: volume_name,
-          Mountpoint: host_mountpoint
+          Mountpoint: mountpoint
         }
       })
       return
@@ -406,7 +430,7 @@ app.post('/VolumeDriver.List', function (req, res) {
       // Add the volume name and mountpoint
       volumes.push({
         Name: root_volume_name,
-        Mountpoint: path.join(host_volume_path, root_volume_name)
+        Mountpoint: get_volume_mountpoint(root_volume_name)
       })
 
     // If the root volume has not been mounted
@@ -435,7 +459,7 @@ app.post('/VolumeDriver.List', function (req, res) {
         // Add the volume name and mountpoint
         volumes.push({
           Name: file.name,
-          Mountpoint: path.join(host_volume_path, file.name)
+          Mountpoint: get_volume_mountpoint(file.name)
         })
 
       // If the volume is not mounted
